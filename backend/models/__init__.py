@@ -1,0 +1,1 @@
+"""Pydantic telemetry models."""
