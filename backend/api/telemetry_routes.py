@@ -5,6 +5,8 @@ from typing import Any, Dict, List
 from fastapi import FastAPI
 
 from backend.models.telemetry import GenerateTelemetryRequest, SimulateScenarioRequest
+from backend.services.alert_engine import generate_alerts
+from backend.services.anomaly_detector import detect_anomalies
 from backend.services.qoe_engine import calculate_qoe, calculate_qoe_for_dataframe, summarize_qoe_results
 from backend.services.telemetry_generator import generate_telemetry
 from backend.services.telemetry_processor import validate_and_clean_telemetry
@@ -57,11 +59,14 @@ def simulate_scenario(request: SimulateScenarioRequest):
         seed=request.seed,
     )
     qoe_results = [calculate_qoe(row) for row in df.to_dict(orient="records")]
+    qoe_summary = summarize_qoe_results(qoe_results, request.scenario)
+    anomalies = detect_anomalies(df)
+    alerts = generate_alerts(df, anomalies)
     summary = {
         "scenario": request.scenario,
         "total_sessions": request.sessions,
         "average_qoe": round(sum(item["qoe_score"] for item in qoe_results) / len(qoe_results), 2),
-        "status": summarize_qoe_results(qoe_results, request.scenario)["status"],
+        "status": qoe_summary["status"],
         "average_bitrate": round(float(df["bitrate"].mean()), 2),
         "average_buffering": round(float(df["buffering_time"].mean()), 2),
         "average_latency": round(float(df["latency"].mean()), 2),
@@ -70,6 +75,12 @@ def simulate_scenario(request: SimulateScenarioRequest):
     return {
         "scenario": request.scenario,
         "telemetry": df.to_dict(orient="records"),
+        "qoe": {
+            "summary": qoe_summary,
+            "results": qoe_results,
+        },
         "qoe_results": qoe_results,
         "summary": summary,
+        "anomalies": anomalies,
+        "alerts": alerts,
     }

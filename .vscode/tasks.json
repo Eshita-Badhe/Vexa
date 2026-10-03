@@ -1,0 +1,29 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "frontend-build",
+			"type": "shell",
+			"command": "cd frontend; $env:NODE_OPTIONS='--max-old-space-size=4096'; npm run build",
+			"isBackground": false,
+			"problemMatcher": [
+				"$tsc"
+			]
+		},
+		{
+			"label": "backend-tests",
+			"type": "shell",
+			"command": "python -m pytest -q tests",
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "anomaly-debug",
+			"type": "shell",
+			"command": "python - <<'PY'\nfrom backend.services.telemetry_generator import generate_telemetry\nfrom backend.services.anomaly_detector import detect_anomalies\nfor scenario in ['healthy','network_congestion','cdn_degradation','server_overload','application_failure']:\n    df = generate_telemetry(scenario, sessions=5, duration_minutes=1, interval_seconds=30, seed=42)\n    anomalies = detect_anomalies(df)\n    print('SCENARIO', scenario, 'count', len(anomalies))\n    print(sorted({a['type'] for a in anomalies}))\n    for a in anomalies[:5]:\n        print(a['type'], a['metric'], a['baseline'], a['observed'], a['change_percent'], a['severity'])\n    print()\nPY",
+			"isBackground": false,
+			"problemMatcher": []
+		}
+	]
+}

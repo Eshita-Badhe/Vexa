@@ -6,6 +6,25 @@ SCENARIO_NAMES = [
     "application_failure",
 ]
 
+ANOMALY_THRESHOLDS = {
+    "bitrate_drop_percent": 30,
+    "buffering_increase_percent": 100,
+    "latency_increase_percent": 100,
+    "packet_loss_increase_percent": 100,
+    "jitter_increase_percent": 100,
+    "playback_failure_increase_percent": 100,
+    "crash_increase_percent": 100,
+    "qoe_degradation_percent": 20,
+    "z_score": 3,
+}
+
+MIN_CONSECUTIVE_POINTS = 2
+ROLLING_WINDOW_SIZE = 5
+SEVERITY_THRESHOLDS = {
+    "WARNING": 50,
+    "CRITICAL": 80,
+}
+
 REGIONS = ["Pune", "Mumbai", "Delhi", "Bangalore", "Hyderabad"]
 DEVICES = ["Android", "iOS", "Web", "SmartTV"]
 CDNS = ["CDN-A", "CDN-B", "CDN-C"]
