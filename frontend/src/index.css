@@ -3,11 +3,18 @@
 @tailwind utilities;
 
 :root {
-  font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  line-height: 1.5;
-  font-weight: 400;
-  color: rgba(226, 232, 240, 1);
-  background: #020617;
+  font-family:
+    Inter,
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
+
+  color: #e8f0f7;
+  background: #05080d;
+
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -15,16 +22,34 @@
 }
 
 html {
-  background: #020617;
+  background: #05080d;
+  scroll-behavior: smooth;
 }
 
 body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
+
   background:
-    radial-gradient(circle at top, rgba(34, 211, 238, 0.12), transparent 30%),
-    linear-gradient(180deg, #020617 0%, #020817 100%);
+    radial-gradient(
+      circle at 15% -10%,
+      rgba(0, 229, 255, 0.13),
+      transparent 28%
+    ),
+    radial-gradient(
+      circle at 90% 10%,
+      rgba(120, 255, 190, 0.06),
+      transparent 24%
+    ),
+    radial-gradient(
+      circle at 50% 100%,
+      rgba(255, 174, 0, 0.045),
+      transparent 30%
+    ),
+    #05080d;
+
+  overflow-x: hidden;
 }
 
 * {
@@ -32,19 +57,888 @@ body {
 }
 
 button,
-select {
+select,
+input {
   font: inherit;
 }
 
+button {
+  cursor: pointer;
+}
+
+/* -------------------------------------------------- */
+/* CUSTOM SCROLLBAR                                   */
+/* -------------------------------------------------- */
+
 ::-webkit-scrollbar {
-  width: 10px;
+  width: 8px;
+  height: 8px;
 }
 
 ::-webkit-scrollbar-track {
-  background: rgba(15, 23, 42, 0.8);
+  background: #080c12;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(56, 189, 248, 0.5);
-  border-radius: 9999px;
+  background: rgba(67, 211, 230, 0.25);
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(67, 211, 230, 0.5);
+}
+
+/* -------------------------------------------------- */
+/* SELECTION                                          */
+/* -------------------------------------------------- */
+
+::selection {
+  background: rgba(34, 211, 238, 0.25);
+  color: #ffffff;
+}
+
+/* -------------------------------------------------- */
+/* APP ATMOSPHERE                                     */
+/* -------------------------------------------------- */
+
+#root {
+  min-height: 100vh;
+  position: relative;
+}
+
+#root::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+
+  background-image:
+    linear-gradient(
+      rgba(255, 255, 255, 0.018) 1px,
+      transparent 1px
+    ),
+    linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0.018) 1px,
+      transparent 1px
+    );
+
+  background-size: 48px 48px;
+
+  mask-image: linear-gradient(
+    to bottom,
+    black 0%,
+    rgba(0, 0, 0, 0.65) 55%,
+    transparent 100%
+  );
+}
+
+/* subtle scanning line */
+#root::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+
+  background: repeating-linear-gradient(
+    to bottom,
+    transparent 0px,
+    transparent 3px,
+    rgba(255, 255, 255, 0.008) 4px
+  );
+}
+
+/* -------------------------------------------------- */
+/* GLASS PANELS                                       */
+/* -------------------------------------------------- */
+
+.rounded-2xl {
+  border-radius: 18px !important;
+}
+
+.rounded-xl {
+  border-radius: 13px !important;
+}
+
+/* Main dashboard cards */
+.border-slate-800.bg-slate-900\/80 {
+  position: relative;
+  overflow: hidden;
+
+  border-color: rgba(148, 163, 184, 0.11) !important;
+
+  background:
+    linear-gradient(
+      135deg,
+      rgba(17, 25, 35, 0.96),
+      rgba(8, 13, 20, 0.96)
+    ) !important;
+
+  box-shadow:
+    0 18px 45px rgba(0, 0, 0, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.035);
+
+  backdrop-filter: blur(18px);
+}
+
+/* Top edge highlight */
+.border-slate-800.bg-slate-900\/80::before {
+  content: "";
+  position: absolute;
+  left: 12%;
+  right: 12%;
+  top: 0;
+
+  height: 1px;
+
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(34, 211, 238, 0.35),
+    transparent
+  );
+
+  opacity: 0.7;
+}
+
+/* -------------------------------------------------- */
+/* HEADER                                             */
+/* -------------------------------------------------- */
+
+header {
+  position: relative;
+  overflow: hidden;
+
+  background:
+    radial-gradient(
+      circle at 0% 0%,
+      rgba(34, 211, 238, 0.08),
+      transparent 32%
+    ),
+    linear-gradient(
+      135deg,
+      rgba(12, 19, 28, 0.98),
+      rgba(5, 9, 15, 0.98)
+    ) !important;
+
+  border-color: rgba(148, 163, 184, 0.14) !important;
+
+  box-shadow:
+    0 25px 70px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+/* Header glow */
+header::after {
+  content: "";
+  position: absolute;
+  width: 280px;
+  height: 280px;
+  right: -120px;
+  top: -170px;
+
+  background: rgba(34, 211, 238, 0.08);
+
+  filter: blur(70px);
+  pointer-events: none;
+}
+
+/* -------------------------------------------------- */
+/* BRAND ICON                                         */
+/* -------------------------------------------------- */
+
+header .bg-cyan-500\/15 {
+  position: relative;
+
+  background:
+    linear-gradient(
+      135deg,
+      rgba(34, 211, 238, 0.18),
+      rgba(34, 211, 238, 0.04)
+    ) !important;
+
+  border: 1px solid rgba(34, 211, 238, 0.22);
+
+  box-shadow:
+    0 0 25px rgba(34, 211, 238, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+/* -------------------------------------------------- */
+/* NAVIGATION                                         */
+/* -------------------------------------------------- */
+
+nav {
+  position: relative;
+}
+
+nav a {
+  position: relative;
+
+  border-radius: 10px !important;
+
+  transition:
+    color 180ms ease,
+    background 180ms ease,
+    border-color 180ms ease,
+    transform 180ms ease;
+}
+
+nav a:hover {
+  transform: translateY(-1px);
+
+  border-color: rgba(34, 211, 238, 0.25) !important;
+
+  background: rgba(34, 211, 238, 0.045) !important;
+
+  color: #e8fbff !important;
+}
+
+/* Active tab */
+nav a.border-cyan-500\/50 {
+  background:
+    linear-gradient(
+      135deg,
+      rgba(34, 211, 238, 0.13),
+      rgba(34, 211, 238, 0.035)
+    ) !important;
+
+  border-color: rgba(34, 211, 238, 0.32) !important;
+
+  box-shadow:
+    inset 0 0 18px rgba(34, 211, 238, 0.035),
+    0 0 18px rgba(34, 211, 238, 0.04);
+}
+
+/* -------------------------------------------------- */
+/* SCENARIO SELECT                                    */
+/* -------------------------------------------------- */
+
+select {
+  color-scheme: dark;
+
+  border: none;
+  outline: none;
+
+  cursor: pointer;
+}
+
+select:focus {
+  outline: none;
+}
+
+option {
+  background: #0a1018;
+  color: #e8f0f7;
+}
+
+/* -------------------------------------------------- */
+/* SIMULATE BUTTON                                    */
+/* -------------------------------------------------- */
+
+button.bg-cyan-500 {
+  position: relative;
+  overflow: hidden;
+
+  background:
+    linear-gradient(
+      135deg,
+      #36e1f4,
+      #20bfd9
+    ) !important;
+
+  color: #031015 !important;
+
+  box-shadow:
+    0 0 24px rgba(34, 211, 238, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+
+  transition:
+    transform 180ms ease,
+    box-shadow 180ms ease,
+    filter 180ms ease;
+}
+
+button.bg-cyan-500::after {
+  content: "";
+
+  position: absolute;
+  inset: 0;
+
+  background: linear-gradient(
+    110deg,
+    transparent 20%,
+    rgba(255, 255, 255, 0.28) 50%,
+    transparent 80%
+  );
+
+  transform: translateX(-120%);
+  transition: transform 500ms ease;
+}
+
+button.bg-cyan-500:hover {
+  transform: translateY(-1px);
+
+  box-shadow:
+    0 0 30px rgba(34, 211, 238, 0.25),
+    0 8px 25px rgba(0, 0, 0, 0.2);
+}
+
+button.bg-cyan-500:hover::after {
+  transform: translateX(120%);
+}
+
+/* -------------------------------------------------- */
+/* METRIC CARDS                                       */
+/* -------------------------------------------------- */
+
+.grid > .rounded-2xl {
+  transition:
+    transform 180ms ease,
+    border-color 180ms ease,
+    box-shadow 180ms ease;
+}
+
+.grid > .rounded-2xl:hover {
+  transform: translateY(-2px);
+
+  border-color: rgba(148, 163, 184, 0.2) !important;
+
+  box-shadow:
+    0 20px 45px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.045);
+}
+
+/* Metric values */
+.text-3xl.font-semibold.text-white {
+  letter-spacing: -0.035em;
+}
+
+/* -------------------------------------------------- */
+/* QOE HERO                                           */
+/* -------------------------------------------------- */
+
+.text-5xl.font-semibold.text-white {
+  letter-spacing: -0.06em;
+
+  text-shadow:
+    0 0 25px rgba(34, 211, 238, 0.12);
+}
+
+/* -------------------------------------------------- */
+/* STATUS BADGES                                      */
+/* -------------------------------------------------- */
+
+.rounded-full.border {
+  backdrop-filter: blur(10px);
+}
+
+/* Healthy */
+.text-emerald-300 {
+  text-shadow: 0 0 14px rgba(52, 211, 153, 0.12);
+}
+
+/* Warning */
+.text-amber-200 {
+  text-shadow: 0 0 14px rgba(251, 191, 36, 0.12);
+}
+
+/* Critical */
+.text-red-200 {
+  text-shadow: 0 0 14px rgba(248, 113, 113, 0.12);
+}
+
+/* -------------------------------------------------- */
+/* CHART CONTAINERS                                   */
+/* -------------------------------------------------- */
+
+.recharts-wrapper {
+  overflow: visible;
+}
+
+.recharts-cartesian-grid-horizontal line,
+.recharts-cartesian-grid-vertical line {
+  stroke: rgba(148, 163, 184, 0.075);
+}
+
+.recharts-text {
+  fill: #6f8193;
+  font-size: 10px;
+}
+
+.recharts-tooltip-wrapper {
+  outline: none;
+}
+
+.recharts-default-tooltip {
+  border:
+    1px solid rgba(148, 163, 184, 0.14) !important;
+
+  background:
+    rgba(8, 13, 20, 0.96) !important;
+
+  border-radius: 12px !important;
+
+  box-shadow:
+    0 15px 35px rgba(0, 0, 0, 0.4);
+}
+
+/* -------------------------------------------------- */
+/* INCIDENT LIST                                      */
+/* -------------------------------------------------- */
+
+.bg-slate-950\/70,
+.bg-slate-950\/60 {
+  background:
+    linear-gradient(
+      135deg,
+      rgba(8, 14, 21, 0.82),
+      rgba(5, 9, 15, 0.72)
+    ) !important;
+
+  border-color: rgba(148, 163, 184, 0.09) !important;
+}
+
+/* -------------------------------------------------- */
+/* TIMELINE                                           */
+/* -------------------------------------------------- */
+
+.h-3.w-3.rounded-full {
+  box-shadow:
+    0 0 0 4px rgba(34, 211, 238, 0.06),
+    0 0 15px rgba(34, 211, 238, 0.28);
+}
+
+/* -------------------------------------------------- */
+/* TABLES                                             */
+/* -------------------------------------------------- */
+
+table {
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+tbody tr {
+  transition: background 150ms ease;
+}
+
+tbody tr:hover {
+  background: rgba(34, 211, 238, 0.025);
+}
+
+/* -------------------------------------------------- */
+/* LOADING                                            */
+/* -------------------------------------------------- */
+
+.animate-pulse {
+  box-shadow:
+    0 0 25px rgba(34, 211, 238, 0.12);
+}
+
+/* -------------------------------------------------- */
+/* CUSTOM UTILITY CLASSES                             */
+/* -------------------------------------------------- */
+
+.signal-panel {
+  background:
+    linear-gradient(
+      135deg,
+      rgba(15, 24, 34, 0.96),
+      rgba(6, 11, 18, 0.96)
+    );
+
+  border: 1px solid rgba(148, 163, 184, 0.12);
+
+  border-radius: 18px;
+
+  box-shadow:
+    0 20px 55px rgba(0, 0, 0, 0.25),
+    inset 0 1px 0 rgba(255, 255, 255, 0.035);
+}
+
+.signal-grid {
+  background-image:
+    linear-gradient(
+      rgba(34, 211, 238, 0.04) 1px,
+      transparent 1px
+    ),
+    linear-gradient(
+      90deg,
+      rgba(34, 211, 238, 0.04) 1px,
+      transparent 1px
+    );
+
+  background-size: 24px 24px;
+}
+
+.live-dot {
+  width: 7px;
+  height: 7px;
+
+  border-radius: 999px;
+
+  background: #34d399;
+
+  box-shadow:
+    0 0 0 4px rgba(52, 211, 153, 0.08),
+    0 0 14px rgba(52, 211, 153, 0.6);
+
+  animation: livePulse 2s infinite;
+}
+
+@keyframes livePulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  50% {
+    opacity: 0.55;
+    transform: scale(0.82);
+  }
+}
+
+.ai-glow {
+  box-shadow:
+    0 0 35px rgba(34, 211, 238, 0.07),
+    inset 0 0 30px rgba(34, 211, 238, 0.025);
+}
+
+.incident-glow {
+  box-shadow:
+    0 0 35px rgba(248, 113, 113, 0.07),
+    inset 0 0 30px rgba(248, 113, 113, 0.02);
+}
+
+.healthy-glow {
+  box-shadow:
+    0 0 35px rgba(52, 211, 153, 0.07),
+    inset 0 0 30px rgba(52, 211, 153, 0.02);
+}
+
+/* -------------------------------------------------- */
+/* RESPONSIVE                                         */
+/* -------------------------------------------------- */
+
+@media (max-width: 768px) {
+  body {
+    background:
+      radial-gradient(
+        circle at top,
+        rgba(34, 211, 238, 0.08),
+        transparent 35%
+      ),
+      #05080d;
+  }
+
+  header {
+    border-radius: 16px !important;
+  }
+
+  .text-5xl.font-semibold.text-white {
+    font-size: 3.2rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+@keyframes loading-scan {
+  0% {
+    transform: translateX(-120%);
+  }
+
+  50% {
+    transform: translateX(300%);
+  }
+
+  100% {
+    transform: translateX(300%);
+  }
+}
+
+/* =========================================================
+   VEXA LANDING HERO
+========================================================= */
+
+.vexa-hero {
+  background:
+    radial-gradient(
+      circle at 15% 20%,
+      rgba(34, 211, 238, 0.13),
+      transparent 32%
+    ),
+    radial-gradient(
+      circle at 90% 80%,
+      rgba(245, 158, 11, 0.10),
+      transparent 30%
+    ),
+    linear-gradient(
+      135deg,
+      rgba(9, 20, 30, 0.98),
+      rgba(6, 11, 18, 0.98)
+    );
+
+  box-shadow:
+    0 30px 80px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+
+.vexa-hero-grid {
+  background-image:
+    linear-gradient(
+      rgba(34, 211, 238, 0.035) 1px,
+      transparent 1px
+    ),
+    linear-gradient(
+      90deg,
+      rgba(34, 211, 238, 0.035) 1px,
+      transparent 1px
+    );
+
+  background-size: 34px 34px;
+
+  mask-image: linear-gradient(
+    to right,
+    black,
+    transparent 90%
+  );
+}
+
+
+/* =========================================================
+   VEXA INTELLIGENCE CORE
+========================================================= */
+
+.vexa-orbit {
+  position: relative;
+
+  width: 300px;
+  height: 300px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+
+.vexa-orbit-ring {
+  position: absolute;
+
+  border-radius: 999px;
+
+  border: 1px solid rgba(34, 211, 238, 0.16);
+
+  animation: vexaOrbit 10s linear infinite;
+}
+
+
+.vexa-orbit-ring-one {
+  width: 230px;
+  height: 230px;
+}
+
+
+.vexa-orbit-ring-two {
+  width: 300px;
+  height: 300px;
+
+  border-color: rgba(245, 158, 11, 0.12);
+
+  animation-duration: 16s;
+  animation-direction: reverse;
+}
+
+
+.vexa-core {
+  position: relative;
+  z-index: 5;
+
+  width: 130px;
+  height: 130px;
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+
+  border-radius: 999px;
+
+  border: 1px solid rgba(34, 211, 238, 0.25);
+
+  background:
+    radial-gradient(
+      circle,
+      rgba(34, 211, 238, 0.14),
+      rgba(6, 15, 22, 0.96) 65%
+    );
+
+  box-shadow:
+    0 0 40px rgba(34, 211, 238, 0.12),
+    inset 0 0 30px rgba(34, 211, 238, 0.05);
+}
+
+
+.vexa-node {
+  position: absolute;
+  z-index: 10;
+
+  display: flex;
+  align-items: center;
+  gap: 7px;
+
+  padding: 8px 11px;
+
+  border-radius: 10px;
+
+  border: 1px solid rgba(148, 163, 184, 0.12);
+
+  background: rgba(5, 12, 18, 0.88);
+
+  backdrop-filter: blur(12px);
+
+  color: #cbd5e1;
+
+  font-size: 9px;
+  font-weight: 700;
+
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+
+  box-shadow:
+    0 10px 25px rgba(0, 0, 0, 0.25);
+}
+
+
+.vexa-node svg {
+  color: #22d3ee;
+}
+
+
+.vexa-node-top {
+  top: 0;
+  left: 50%;
+
+  transform: translateX(-50%);
+}
+
+
+.vexa-node-right {
+  right: -10px;
+  top: 50%;
+
+  transform: translateY(-50%);
+}
+
+
+.vexa-node-bottom {
+  bottom: 0;
+  left: 50%;
+
+  transform: translateX(-50%);
+
+  border-color: rgba(245, 158, 11, 0.18);
+}
+
+
+.vexa-node-bottom svg {
+  color: #f59e0b;
+}
+
+
+.vexa-node-left {
+  left: -10px;
+  top: 50%;
+
+  transform: translateY(-50%);
+}
+
+
+@keyframes vexaOrbit {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* =========================================================
+   VEXA TYPOGRAPHY UPGRADE
+========================================================= */
+
+body {
+  font-size: 15px;
+}
+
+
+/* Main readable paragraphs */
+
+p {
+  font-size: 0.95rem;
+  line-height: 1.65;
+}
+
+
+/* Dashboard section headings */
+
+h1 {
+  font-size: 1.75rem;
+}
+
+
+h2 {
+  font-size: 1.45rem;
+}
+
+
+h3 {
+  font-size: 1.15rem;
+}
+
+
+/* Navigation */
+
+nav a {
+  font-size: 0.82rem !important;
+}
+
+
+/* Metric values */
+
+.text-2xl.font-semibold {
+  font-size: 1.75rem !important;
+}
+
+
+/* Improve small descriptive text */
+
+.text-xs {
+  font-size: 0.78rem !important;
+  line-height: 1.5;
+}
+
+
+/* Make labels readable without becoming huge */
+
+.text-\[9px\] {
+  font-size: 0.65rem !important;
+}
+
+
+.text-\[10px\] {
+  font-size: 0.72rem !important;
 }

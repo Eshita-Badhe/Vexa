@@ -49,3 +49,30 @@ export async function fetchScenarioAnalytics(): Promise<ScenarioAnalyticsSummary
 
   return results;
 }
+
+export async function askIncidentQuestion(
+  question: string,
+  incident: any
+) {
+  const response = await fetch(
+    `${API_BASE_URL}/incident/chat`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        question,
+        incident,
+      }),
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error(
+      "Unable to contact the incident assistant."
+    );
+  }
+
+  return response.json();
+}

@@ -11,6 +11,12 @@ from backend.services.qoe_engine import calculate_qoe, calculate_qoe_for_datafra
 from backend.services.telemetry_generator import generate_telemetry
 from backend.services.telemetry_processor import validate_and_clean_telemetry
 from backend.utils.constants import SCENARIO_NAMES
+from backend.services.root_cause_engine import analyze_root_cause
+from backend.services.qualcomm_ai_service import (
+    build_ai_evidence,
+    explain_incident,
+)
+from backend.services.incident_chat_service import (ask_incident_question)
 
 app = FastAPI(title="Media Stream Quality API", version="1.0.0")
 
@@ -51,6 +57,9 @@ def calculate_qoe_endpoint(payload: Dict[str, Any]):
 
 @app.post("/simulate")
 def simulate_scenario(request: SimulateScenarioRequest):
+    # ---------------------------------------------------------
+    # 1. Generate telemetry
+    # ---------------------------------------------------------
     df = generate_telemetry(
         scenario=request.scenario,
         sessions=request.sessions,
@@ -58,29 +67,156 @@ def simulate_scenario(request: SimulateScenarioRequest):
         interval_seconds=request.interval_seconds,
         seed=request.seed,
     )
-    qoe_results = [calculate_qoe(row) for row in df.to_dict(orient="records")]
-    qoe_summary = summarize_qoe_results(qoe_results, request.scenario)
+
+    # ---------------------------------------------------------
+    # 2. Calculate QoE
+    # ---------------------------------------------------------
+    telemetry_records = df.to_dict(orient="records")
+
+    qoe_results = [
+        calculate_qoe(row)
+        for row in telemetry_records
+    ]
+
+    qoe_summary = summarize_qoe_results(
+        qoe_results,
+        request.scenario,
+    )
+
+    # ---------------------------------------------------------
+    # 3. Detect anomalies
+    # ---------------------------------------------------------
     anomalies = detect_anomalies(df)
-    alerts = generate_alerts(df, anomalies)
+
+    # ---------------------------------------------------------
+    # 4. Generate alerts
+    # ---------------------------------------------------------
+    alerts = generate_alerts(
+        df,
+        anomalies,
+    )
+
+    # ---------------------------------------------------------
+    # 5. Root Cause Analysis
+    # ---------------------------------------------------------
+    root_cause = analyze_root_cause(
+        telemetry_records,
+        anomalies,
+    )
+
+    # ---------------------------------------------------------
+    # Qualcomm AI Explanation
+    # ---------------------------------------------------------
+
+    ai_explanation = None
+
+    try:
+
+        ai_evidence = build_ai_evidence(
+            scenario=request.scenario,
+            telemetry_records=telemetry_records,
+            qoe_results=qoe_results,
+            anomalies=anomalies,
+            root_cause=root_cause,
+        )
+
+        ai_explanation = explain_incident(
+            ai_evidence
+        )
+
+    except Exception as exc:
+
+        print(
+            f"Qualcomm AI explanation failed: {exc}"
+        )
+
+    # ---------------------------------------------------------
+    # 6. Summary
+    # ---------------------------------------------------------
+    average_qoe = (
+        sum(item["qoe_score"] for item in qoe_results)
+        / len(qoe_results)
+        if qoe_results
+        else 0
+    )
+
     summary = {
         "scenario": request.scenario,
         "total_sessions": request.sessions,
-        "average_qoe": round(sum(item["qoe_score"] for item in qoe_results) / len(qoe_results), 2),
+        "average_qoe": round(average_qoe, 2),
         "status": qoe_summary["status"],
-        "average_bitrate": round(float(df["bitrate"].mean()), 2),
-        "average_buffering": round(float(df["buffering_time"].mean()), 2),
-        "average_latency": round(float(df["latency"].mean()), 2),
-        "average_packet_loss": round(float(df["packet_loss"].mean()), 2),
+        "average_bitrate": round(
+            float(df["bitrate"].mean()),
+            2,
+        ),
+        "average_buffering": round(
+            float(df["buffering_time"].mean()),
+            2,
+        ),
+        "average_latency": round(
+            float(df["latency"].mean()),
+            2,
+        ),
+        "average_packet_loss": round(
+            float(df["packet_loss"].mean()),
+            2,
+        ),
     }
+
+    # ---------------------------------------------------------
+    # 7. Final response
+    # ---------------------------------------------------------
     return {
         "scenario": request.scenario,
-        "telemetry": df.to_dict(orient="records"),
+
+        "telemetry": telemetry_records,
+
         "qoe": {
             "summary": qoe_summary,
             "results": qoe_results,
         },
+
+        # Kept because your frontend may already use this field.
         "qoe_results": qoe_results,
+
         "summary": summary,
+
         "anomalies": anomalies,
+
         "alerts": alerts,
+
+        # NEW
+        "root_cause": root_cause,
+
+        # Qualcomm AI will be connected here later.
+        "ai_explanation": ai_explanation,
     }
+
+@app.post("/incident/chat")
+def incident_chat(
+    payload: Dict[str, Any]
+):
+
+    question = str(
+        payload.get(
+            "question",
+            "",
+        )
+    ).strip()
+
+    incident = payload.get(
+        "incident",
+        {},
+    )
+
+    if not question:
+        return {
+            "answer": "Please enter a question.",
+            "provider": "System",
+            "configured": False,
+        }
+
+    return ask_incident_question(
+        question,
+        incident,
+    )
