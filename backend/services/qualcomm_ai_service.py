@@ -1,11 +1,13 @@
 import json
 import os
+from pathlib import Path
 from typing import Any, Dict, Optional
 
 import requests
 from dotenv import load_dotenv
 
-load_dotenv()
+BASE_DIR = Path(__file__).resolve().parents[1]
+load_dotenv(BASE_DIR / ".env")
 
 
 # ---------------------------------------------------------
@@ -62,19 +64,10 @@ IMPORTANT RULES:
 4. Explain the incident clearly for an operations engineer.
 5. Keep the response concise and evidence-based.
 
-Return ONLY valid JSON with exactly these fields:
-
-{{
-  "what_happened": "...",
-  "why": "...",
-  "root_cause": "...",
-  "confidence": 0,
-  "recommended_checks": [
-    "...",
-    "..."
-  ],
-  "provider": "Qualcomm Imagine"
-}}
+Return a concise explanation in plain text, in two or three sentences.
+Do not return JSON, markdown, or a tool call. Explain what happened
+and cite the supplied evidence. Do not repeat the root-cause label
+unless the evidence supports it.
 
 ---------------------------------------------------------
 INCIDENT
@@ -122,7 +115,7 @@ ROOT CAUSE EVIDENCE
     indent=2
 )}
 
-Now generate the JSON explanation.
+Now write the concise plain-text explanation.
 """
 
 
@@ -134,28 +127,95 @@ def _extract_text(
     response_data: Dict[str, Any]
 ) -> str:
 
-    choices = response_data.get("choices", [])
-
-    if not choices:
+    if not isinstance(response_data, dict):
         return ""
 
-    first_choice = choices[0]
+    choices = response_data.get("choices", [])
 
-    message = first_choice.get("message")
+    if isinstance(choices, list):
+        for choice in choices:
+            if not isinstance(choice, dict):
+                continue
 
-    if isinstance(message, dict):
+            message = choice.get("message") or {}
+            if isinstance(message, dict):
+                content = message.get("content")
+                if isinstance(content, str) and content.strip():
+                    return content.strip()
+                if isinstance(content, list):
+                    chunks = []
+                    for item in content:
+                        if isinstance(item, dict):
+                            text = item.get("text") or item.get("content") or item.get("value")
+                            if isinstance(text, str) and text.strip():
+                                chunks.append(text.strip())
+                    if chunks:
+                        return "\n".join(chunks)
 
-        content = message.get("content")
+            text = choice.get("text")
+            if isinstance(text, str) and text.strip():
+                return text.strip()
+            if isinstance(text, list):
+                chunks = []
+                for item in text:
+                    if isinstance(item, dict):
+                        value = item.get("text") or item.get("content") or item.get("value")
+                        if isinstance(value, str) and value.strip():
+                            chunks.append(value.strip())
+                if chunks:
+                    return "\n".join(chunks)
 
-        if content:
-            return str(content)
-
-    text = first_choice.get("text")
-
-    if text:
-        return str(text)
+    for key in ["output_text", "generated_text", "completion", "text"]:
+        value = response_data.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
 
     return ""
+
+
+# ---------------------------------------------------------
+# Fallback Explanation
+# ---------------------------------------------------------
+
+def build_structured_fallback(
+    evidence: Dict[str, Any]
+) -> Dict[str, Any]:
+
+    root_cause = evidence.get("root_cause") or "Unknown"
+    confidence = int(evidence.get("root_cause_confidence", 0) or 0)
+    qoe = evidence.get("qoe")
+    qoe_status = evidence.get("qoe_status") or "Unknown"
+
+    anomalies = evidence.get("anomalies", [])
+    first_anomaly = anomalies[0] if anomalies else {}
+    anomaly_type = first_anomaly.get("type") or "no significant anomaly"
+    anomaly_severity = first_anomaly.get("severity") or "unclassified"
+    why = first_anomaly.get("evidence")
+    if not why:
+        root_cause_evidence = evidence.get("root_cause_evidence", [])
+        if root_cause_evidence:
+            why = "; ".join(str(item) for item in root_cause_evidence[:2])
+        else:
+            why = (
+                f"No significant anomaly was detected; the root-cause "
+                f"analysis classified the incident as {root_cause}."
+            )
+
+    return {
+        "what_happened": (
+            f"The {evidence.get('scenario', 'streaming')} scenario "
+            f"has an average QoE of {qoe} ({qoe_status})."
+        ),
+        "why": str(why),
+        "root_cause": str(root_cause),
+        "confidence": max(0, min(confidence, 100)),
+        "recommended_checks": [
+            "Review CDN or edge latency for the affected region.",
+            "Check packet loss and jitter during the incident window.",
+            "Validate streaming server load and playback failure logs.",
+        ],
+        "provider": "Qualcomm Imagine (fallback)",
+    }
 
 
 # ---------------------------------------------------------
@@ -194,15 +254,7 @@ def _parse_json_response(
     except json.JSONDecodeError:
         pass
 
-    # Safe fallback
-    return {
-        "what_happened": text,
-        "why": "",
-        "root_cause": "",
-        "confidence": 0,
-        "recommended_checks": [],
-        "provider": "Qualcomm Imagine",
-    }
+    return {"what_happened": text}
 
 
 # ---------------------------------------------------------
@@ -223,10 +275,11 @@ def explain_incident(
 
         return None
 
-    url = (
-        IMAGINE_API_ENDPOINT.rstrip("/")
-        + "/v2/chat/completions"
-    )
+    base_url = IMAGINE_API_ENDPOINT.rstrip("/")
+    if base_url.endswith("/v2"):
+        url = base_url + "/chat/completions"
+    else:
+        url = base_url + "/v2/chat/completions"
 
     prompt = build_incident_prompt(evidence)
 
@@ -283,14 +336,34 @@ def explain_incident(
         )
 
         if not generated_text:
-
-            raise RuntimeError(
-                "Qualcomm returned an empty response."
+            print(
+                "Qualcomm returned an empty or unusable response; "
+                "using structured fallback explanation."
+            )
+            return build_structured_fallback(
+                evidence
             )
 
-        return _parse_json_response(
+        parsed = _parse_json_response(
             generated_text
         )
+        required_fields = {
+            "what_happened",
+            "why",
+            "root_cause",
+            "confidence",
+            "recommended_checks",
+        }
+        if required_fields.issubset(parsed):
+            parsed.setdefault("provider", "Qualcomm Imagine")
+            return parsed
+
+        explanation = build_structured_fallback(evidence)
+        model_text = parsed.get("what_happened")
+        if model_text:
+            explanation["what_happened"] = str(model_text).strip()
+            explanation["provider"] = "Qualcomm Imagine"
+        return explanation
 
     except requests.RequestException as exc:
 
@@ -384,11 +457,11 @@ def build_ai_evidence(
 
         qoe_values = [
 
-            float(result["qoe"])
+            float(result.get("qoe_score", result.get("qoe", 0)))
 
             for result in qoe_results
 
-            if result.get("qoe") is not None
+            if result.get("qoe_score", result.get("qoe")) is not None
 
         ]
 
@@ -432,19 +505,22 @@ def build_ai_evidence(
 
     if root_cause:
 
-        root_cause_name = root_cause.get(
-            "cause"
-        )
+        primary_cause = root_cause.get("primary", root_cause)
+        if isinstance(primary_cause, dict):
+            root_cause_name = primary_cause.get(
+                "label",
+                primary_cause.get("cause"),
+            )
 
-        root_cause_confidence = root_cause.get(
-            "confidence",
-            0,
-        )
+            root_cause_confidence = primary_cause.get(
+                "confidence",
+                0,
+            )
 
-        root_cause_evidence = root_cause.get(
-            "evidence",
-            [],
-        )
+            root_cause_evidence = primary_cause.get(
+                "evidence",
+                [],
+            )
 
     # -----------------------------------------------------
     # QoE Status

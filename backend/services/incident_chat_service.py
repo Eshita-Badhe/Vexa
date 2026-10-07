@@ -2,10 +2,14 @@ from __future__ import annotations
 
 import json
 import os
+from pathlib import Path
 from typing import Any, Dict
 
 import requests
+from dotenv import load_dotenv
 
+BASE_DIR = Path(__file__).resolve().parents[1]
+load_dotenv(BASE_DIR / ".env")
 
 IMAGINE_API_ENDPOINT = os.getenv(
     "IMAGINE_API_ENDPOINT",
@@ -30,21 +34,59 @@ def build_incident_context(
         {},
     )
 
+    qoe = incident.get("qoe", {})
+    qoe_summary = (
+        qoe.get("summary", qoe)
+        if isinstance(qoe, dict)
+        else {}
+    )
+
     primary = (
         root_cause.get("primary", {})
         if isinstance(root_cause, dict)
         else {}
     )
 
+    anomalies = incident.get("anomalies", [])
+    compact_anomalies = [
+        {
+            "type": anomaly.get("type"),
+            "severity": anomaly.get("severity"),
+            "confidence": anomaly.get("confidence"),
+            "metric": anomaly.get("metric"),
+            "change_percent": anomaly.get("change_percent"),
+            "evidence": str(
+                anomaly.get("evidence_summary")
+                or anomaly.get("evidence", "")
+            )[:240],
+        }
+        for anomaly in anomalies[-8:]
+        if isinstance(anomaly, dict)
+    ]
+
+    alerts = incident.get("alerts", [])
+    compact_alerts = [
+        {
+            "severity": alert.get("severity"),
+            "title": str(alert.get("title", ""))[:120],
+            "message": str(alert.get("message", ""))[:240],
+            "anomaly_type": alert.get("anomaly_type"),
+            "confidence": alert.get("confidence"),
+        }
+        for alert in alerts[-8:]
+        if isinstance(alert, dict)
+    ]
+
     return {
         "scenario": incident.get(
             "scenario"
         ),
 
-        "qoe": incident.get(
-            "qoe",
-            {},
-        ),
+        "qoe": {
+            "average_qoe": qoe_summary.get("average_qoe"),
+            "status": qoe_summary.get("status"),
+            "total_sessions": qoe_summary.get("total_sessions"),
+        },
 
         "root_cause": {
             "cause": primary.get(
@@ -76,20 +118,11 @@ def build_incident_context(
             ""
         ),
 
-        "anomalies": incident.get(
-            "anomalies",
-            [],
-        ),
+        "anomalies": compact_anomalies,
 
-        "alerts": incident.get(
-            "alerts",
-            [],
-        ),
+        "alerts": compact_alerts,
 
-        "summary": incident.get(
-            "summary",
-            {},
-        ),
+        "summary": incident.get("summary", {}),
     }
 
 def ask_incident_question(
@@ -156,43 +189,89 @@ Answer the investigator's question using only
 the incident context above.
 """
 
-    response = requests.post(
-        f"{IMAGINE_API_ENDPOINT}/v2/chat/completions",
-        headers={
-            "Authorization": (
-                f"Bearer {IMAGINE_API_KEY}"
+    try:
+        base_url = IMAGINE_API_ENDPOINT.rstrip("/")
+        if base_url.endswith("/v2"):
+            request_url = base_url + "/chat/completions"
+        else:
+            request_url = base_url + "/v2/chat/completions"
+
+        response = requests.post(
+            request_url,
+            headers={
+                "Authorization": (
+                    f"Bearer {IMAGINE_API_KEY}"
+                ),
+                "Content-Type": "application/json",
+            },
+            json={
+                "model": IMAGINE_MODEL,
+                "messages": [
+                    {
+                        "role": "system",
+                        "content": system_prompt,
+                    },
+                    {
+                        "role": "user",
+                        "content": user_prompt,
+                    },
+                ],
+                "temperature": 0.2,
+            },
+            timeout=60,
+        )
+
+        if response.status_code >= 400:
+            return {
+                "answer": (
+                    "Qualcomm Imagine is temporarily unavailable. "
+                    "The incident analysis is still available, but the AI assistant could not generate a live answer right now. "
+                    f"HTTP {response.status_code}."
+                ),
+                "provider": "Qualcomm Imagine",
+                "configured": True,
+            }
+
+        data = response.json()
+        answer = (
+            data.get("choices", [{}])[0]
+            .get("message", {})
+            .get("content", "")
+        )
+
+        if not answer or not str(answer).strip():
+            return {
+                "answer": (
+                    "Qualcomm Imagine returned no usable answer. "
+                    "The deterministic incident analysis is still available, but the AI explanation is currently unavailable."
+                ),
+                "provider": "Qualcomm Imagine",
+                "configured": True,
+            }
+
+        return {
+            "answer": str(answer).strip(),
+            "provider": "Qualcomm Imagine",
+            "configured": True,
+        }
+
+    except requests.RequestException as exc:
+        return {
+            "answer": (
+                "Qualcomm Imagine is not responding right now. "
+                "The incident analysis remains available, but AI-powered chat is temporarily unavailable. "
+                f"Details: {exc}"
             ),
-            "Content-Type": "application/json",
-        },
-        json={
-            "model": IMAGINE_MODEL,
-            "messages": [
-                {
-                    "role": "system",
-                    "content": system_prompt,
-                },
-                {
-                    "role": "user",
-                    "content": user_prompt,
-                },
-            ],
-            "temperature": 0.2,
-        },
-        timeout=60,
-    )
-
-    response.raise_for_status()
-
-    data = response.json()
-
-    answer = (
-        data.get("choices", [{}])[0]
-        .get("message", {})
-        .get("content", "")
-    )
-
-    return {
-        "answer": answer.strip(),
-        "provider": "Qualcomm Imagine",
-        "configured": True,
-    }
+            "provider": "Qualcomm Imagine",
+            "configured": True,
+        }
+    except Exception as exc:
+        return {
+            "answer": (
+                "The incident AI assistant could not complete the request. "
+                "The deterministic analysis is still available. "
+                f"Details: {exc}"
+            ),
+            "provider": "Qualcomm Imagine",
+            "configured": True,
+        }
