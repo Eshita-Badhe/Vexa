@@ -115,6 +115,195 @@ def _build_record(
         "server_load": round(float(np.clip(server_load, 0.0, 100.0)), 2),
     }
 
+def _build_multi_factor_record(
+    scenarios: list[str],
+    timestamp: datetime,
+    session_id: str,
+    region: str,
+    device: str,
+    cdn: str,
+    progress: float,
+    rng: np.random.Generator,
+) -> Dict[str, Any]:
+    """
+    Build one telemetry record containing the combined effects
+    of multiple incident scenarios.
+
+    Existing single-scenario behavior is preserved by reusing
+    _build_record() for each selected factor.
+    """
+
+    # Healthy baseline.
+    baseline = _build_record(
+        scenario="healthy",
+        timestamp=timestamp,
+        session_id=session_id,
+        region=region,
+        device=device,
+        cdn=cdn,
+        progress=progress,
+        rng=rng,
+    )
+
+    # Start from the healthy baseline.
+    bitrate = float(baseline["bitrate"])
+    buffering_time = float(baseline["buffering_time"])
+    latency = float(baseline["latency"])
+    packet_loss = float(baseline["packet_loss"])
+    jitter = float(baseline["jitter"])
+    playback_failures = int(baseline["playback_failures"])
+    crashes = int(baseline["crashes"])
+    startup_time = float(baseline["startup_time"])
+    server_load = float(baseline["server_load"])
+
+    # Nominal healthy values from _build_record().
+    healthy_baseline = {
+        "bitrate": 8.8,
+        "buffering_time": 0.25,
+        "latency": 38.0,
+        "packet_loss": 0.2,
+        "jitter": 12.0,
+        "playback_failures": 0,
+        "crashes": 0,
+        "startup_time": 1.6,
+        "server_load": 15.0,
+    }
+
+    for scenario in scenarios:
+        scenario_record = _build_record(
+            scenario=scenario,
+            timestamp=timestamp,
+            session_id=session_id,
+            region=region,
+            device=device,
+            cdn=cdn,
+            progress=progress,
+            rng=rng,
+        )
+
+        # ---------------------------------------------------------
+        # Degradation metrics
+        # ---------------------------------------------------------
+
+        # Lower bitrate is worse.
+        bitrate -= max(
+            0.0,
+            healthy_baseline["bitrate"]
+            - float(scenario_record["bitrate"]),
+        )
+
+        # Higher values are worse.
+        buffering_time += max(
+            0.0,
+            float(scenario_record["buffering_time"])
+            - healthy_baseline["buffering_time"],
+        )
+
+        latency += max(
+            0.0,
+            float(scenario_record["latency"])
+            - healthy_baseline["latency"],
+        )
+
+        packet_loss += max(
+            0.0,
+            float(scenario_record["packet_loss"])
+            - healthy_baseline["packet_loss"],
+        )
+
+        jitter += max(
+            0.0,
+            float(scenario_record["jitter"])
+            - healthy_baseline["jitter"],
+        )
+
+        startup_time += max(
+            0.0,
+            float(scenario_record["startup_time"])
+            - healthy_baseline["startup_time"],
+        )
+
+        server_load += max(
+            0.0,
+            float(scenario_record["server_load"])
+            - healthy_baseline["server_load"],
+        )
+
+        # ---------------------------------------------------------
+        # Failure/event metrics
+        # ---------------------------------------------------------
+
+        playback_failures += int(
+            max(0, scenario_record["playback_failures"])
+        )
+
+        crashes += int(
+            max(0, scenario_record["crashes"])
+        )
+
+    # -------------------------------------------------------------
+    # Build final combined record
+    # -------------------------------------------------------------
+
+    resolution = str(
+        rng.choice(
+            RESOLUTIONS,
+            p=[0.15, 0.25, 0.45, 0.15],
+        )
+    )
+
+    return {
+        "timestamp": timestamp.isoformat(),
+        "session_id": session_id,
+        "region": region,
+        "device": device,
+        "cdn": cdn,
+
+        "bitrate": round(
+            float(max(0.0, bitrate)),
+            2,
+        ),
+
+        "buffering_time": round(
+            float(max(0.0, buffering_time)),
+            2,
+        ),
+
+        "latency": round(
+            float(max(0.0, latency)),
+            2,
+        ),
+
+        "packet_loss": round(
+            float(np.clip(packet_loss, 0.0, 100.0)),
+            2,
+        ),
+
+        "jitter": round(
+            float(max(0.0, jitter)),
+            2,
+        ),
+
+        "playback_failures": int(
+            max(0, playback_failures)
+        ),
+
+        "crashes": int(
+            max(0, crashes)
+        ),
+
+        "startup_time": round(
+            float(max(0.0, startup_time)),
+            2,
+        ),
+
+        "resolution": resolution,
+
+        "server_load": round(
+            float(np.clip(server_load, 0.0, 100.0)),
+            2,
+        ),
+    }
 
 def generate_telemetry(
     scenario: str,
@@ -122,42 +311,106 @@ def generate_telemetry(
     duration_minutes: int = 30,
     interval_seconds: int = 10,
     seed: int = 42,
+    scenarios: Optional[list[str]] = None,
 ):
     scenario_name = str(scenario).lower().replace("-", "_")
-    if scenario_name not in SCENARIO_NAMES:
-        raise ValueError(f"Unsupported scenario '{scenario}'. Available: {SCENARIO_NAMES}")
 
-    rng = np.random.default_rng(seed)
-    total_intervals = max(1, int((duration_minutes * 60) / interval_seconds))
+    # Validate simulation mode
+    if scenario_name == "multi_factor":
+        active_scenarios = [
+            str(s).lower().replace("-", "_")
+            for s in (scenarios or [])
+        ]
+
+        if not 2 <= len(active_scenarios) <= 3:
+            raise ValueError(
+                "Multi-factor simulation requires 2 to 3 scenarios."
+            )
+
+        if len(set(active_scenarios)) != len(active_scenarios):
+            raise ValueError(
+                "Duplicate incident factors are not allowed."
+            )
+
+        invalid = [
+            s for s in active_scenarios
+            if s not in SCENARIO_NAMES or s == "healthy"
+        ]
+
+        if invalid:
+            raise ValueError(
+                f"Unsupported incident factors: {invalid}"
+            )
+
+    else:
+        if scenario_name not in SCENARIO_NAMES:
+            raise ValueError(
+                f"Unsupported scenario '{scenario_name}'. "
+                f"Available: {SCENARIO_NAMES}"
+            )
+
+        active_scenarios = [scenario_name]
+
+    total_intervals = max(
+        1,
+        int((duration_minutes * 60) / interval_seconds)
+    )
+
     records: List[Dict[str, Any]] = []
 
     for session_number in range(sessions):
         session_id = f"session_{session_number + 1:03d}"
+
         region = REGIONS[session_number % len(REGIONS)]
         device = DEVICES[session_number % len(DEVICES)]
         cdn = CDNS[session_number % len(CDNS)]
+
         session_seed = int(seed + session_number * 97)
         session_rng = np.random.default_rng(session_seed)
 
         for step in range(total_intervals):
-            progress = float(step / max(1, total_intervals - 1))
-            timestamp = datetime(2024, 1, 1) + timedelta(minutes=duration_minutes * (session_number / max(1, sessions))) + timedelta(seconds=step * interval_seconds)
-            record = _build_record(
-                scenario=scenario_name,
-                timestamp=timestamp,
-                session_id=session_id,
-                region=region,
-                device=device,
-                cdn=cdn,
-                progress=progress,
-                rng=session_rng,
+            progress = float(
+                step / max(1, total_intervals - 1)
             )
+
+            timestamp = (
+                datetime(2024, 1, 1)
+                + timedelta(
+                    minutes=duration_minutes
+                    * (session_number / max(1, sessions))
+                )
+                + timedelta(seconds=step * interval_seconds)
+            )
+
+            if scenario_name == "multi_factor":
+                record = _build_multi_factor_record(
+                    scenarios=active_scenarios,
+                    timestamp=timestamp,
+                    session_id=session_id,
+                    region=region,
+                    device=device,
+                    cdn=cdn,
+                    progress=progress,
+                    rng=session_rng,
+                )
+            else:
+                record = _build_record(
+                    scenario=scenario_name,
+                    timestamp=timestamp,
+                    session_id=session_id,
+                    region=region,
+                    device=device,
+                    cdn=cdn,
+                    progress=progress,
+                    rng=session_rng,
+                )
+
             records.append(record)
 
     df = pd.DataFrame.from_records(records)
     df = validate_and_clean_telemetry(df)
-    return df
 
+    return df
 
 def save_telemetry_csv(df, output_path: str | Path):
     path = Path(output_path)

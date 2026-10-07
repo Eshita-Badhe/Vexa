@@ -165,10 +165,12 @@ class RootCauseEngine:
         self,
         telemetry: List[Any],
         anomalies: List[Any],
+        scenarios: List[str] | None = None,
     ) -> Dict[str, Any]:
 
         telemetry = telemetry or []
         anomalies = anomalies or []
+        scenarios = scenarios or []
 
         if not telemetry and not anomalies:
             return self._unknown_result()
@@ -200,39 +202,188 @@ class RootCauseEngine:
             application,
         ]
 
-        # Sort highest confidence first.
+        # ---------------------------------------------------------
+        # Normalize selected scenario names
+        # ---------------------------------------------------------
+
+        selected_causes = {
+            scenario.upper()
+            for scenario in scenarios
+        }
+
+        scenario_to_cause = {
+            "NETWORK_CONGESTION": "NETWORK_CONGESTION",
+            "CDN_DEGRADATION": "CDN_DEGRADATION",
+            "SERVER_OVERLOAD": "SERVER_OVERLOAD",
+            "APPLICATION_FAILURE": "APPLICATION_FAILURE",
+        }
+
+        selected_causes = {
+            scenario_to_cause[s]
+            for s in selected_causes
+            if s in scenario_to_cause
+        }
+
+        # ---------------------------------------------------------
+        # Multi-factor simulation
+        # ---------------------------------------------------------
+
+        # ---------------------------------------------------------
+        # Apply selected simulation scenario as contextual prior
+        # ---------------------------------------------------------
+
+        if len(selected_causes) == 1:
+
+            # Single-factor simulation
+            selected_cause = next(iter(selected_causes))
+
+            for candidate in candidates:
+
+                if candidate["cause"] == selected_cause:
+
+                    # Selected scenario gets a stronger prior,
+                    # but telemetry evidence still matters.
+                    if candidate["confidence"] >= 25:
+                        candidate["confidence"] = min(
+                            candidate["confidence"] * 0.70 + 30,
+                            100,
+                        )
+
+                else:
+
+                    # Reduce unrelated causes because this is
+                    # explicitly a single-factor simulation.
+                    candidate["confidence"] *= 0.70
+
+
+        elif len(selected_causes) >= 2:
+
+            # Multi-factor simulation
+
+            for candidate in candidates:
+
+                if candidate["cause"] in selected_causes:
+
+                    # Selected causes receive contextual priority.
+                    candidate["confidence"] = min(
+                        candidate["confidence"] * 0.70 + 30,
+                        100,
+                    )
+
+                else:
+
+                    # Unselected causes are treated as alternatives.
+                    candidate["confidence"] *= 0.70
+
+        # ---------------------------------------------------------
+        # Rank
+        # ---------------------------------------------------------
+
         candidates.sort(
             key=lambda item: item["confidence"],
             reverse=True,
         )
 
-        # If all scores are weak, use UNKNOWN.
+        # ---------------------------------------------------------
+        # Weak evidence
+        # ---------------------------------------------------------
+
         if candidates[0]["confidence"] < 25:
-            primary = {
-                "cause": "UNKNOWN",
-                "label": "Unknown",
-                "confidence": round(
-                    100 - candidates[0]["confidence"],
-                    1,
+
+            return {
+                "incident_type": "UNKNOWN",
+
+                "primary": {
+                    "cause": "UNKNOWN",
+                    "label": "Unknown",
+                    "confidence": 0,
+                    "evidence": [
+                        "No root cause has enough correlated evidence."
+                    ],
+                    "contributing_signals": [],
+                },
+
+                "contributing_causes": [],
+
+                "alternatives": [],
+
+                "analysis_summary": (
+                    "The available telemetry does not provide "
+                    "enough correlated evidence to determine "
+                    "the root cause."
                 ),
-                "evidence": [
-                    "No root cause has enough correlated evidence."
-                ],
-                "contributing_signals": [],
             }
-        else:
-            primary = candidates[0]
+
+        primary = candidates[0]
+
+        # ---------------------------------------------------------
+        # Contributing causes
+        # ---------------------------------------------------------
+
+        contributing_causes = [
+            candidate
+            for candidate in candidates[1:]
+            if candidate["confidence"] >= 40
+            and (
+                not selected_causes
+                or candidate["cause"] in selected_causes
+            )
+        ]
+
+        # ---------------------------------------------------------
+        # Alternatives
+        # ---------------------------------------------------------
 
         alternatives = [
             candidate
             for candidate in candidates[1:]
-            if candidate["confidence"] >= 15
+            if candidate["confidence"] >= 20
+            and candidate not in contributing_causes
         ]
 
+        # ---------------------------------------------------------
+        # Incident type
+        # ---------------------------------------------------------
+
+        if contributing_causes:
+            incident_type = "MULTI_FACTOR"
+        else:
+            incident_type = "SINGLE_FACTOR"
+
+        # ---------------------------------------------------------
+        # Summary
+        # ---------------------------------------------------------
+
+        if incident_type == "MULTI_FACTOR":
+
+            labels = [
+                candidate["label"]
+                for candidate in contributing_causes
+            ]
+
+            analysis_summary = (
+                f"{primary['label']} is the dominant root cause "
+                f"with {primary['confidence']:.0f}% confidence. "
+                f"Contributing factors include "
+                f"{', '.join(labels)}."
+            )
+
+        else:
+
+            analysis_summary = self._build_summary(
+                primary
+            )
+
         return {
+            "incident_type": incident_type,
+
             "primary": primary,
+
+            "contributing_causes": contributing_causes,
+
             "alternatives": alternatives,
-            "analysis_summary": self._build_summary(primary),
+
+            "analysis_summary": analysis_summary,
         }
 
     # ---------------------------------------------------------------
@@ -971,21 +1122,28 @@ class RootCauseEngine:
     def _unknown_result():
 
         return {
+            "incident_type": "UNKNOWN",
+
             "primary": {
                 "cause": "UNKNOWN",
                 "label": "Unknown",
                 "confidence": 0,
+
                 "evidence": [
                     "Insufficient telemetry or anomaly data."
                 ],
+
                 "contributing_signals": [],
             },
+
+            "contributing_causes": [],
+
             "alternatives": [],
+
             "analysis_summary": (
                 "Insufficient data for root-cause analysis."
             ),
         }
-
 
 # -------------------------------------------------------------------
 # Convenience function
@@ -994,6 +1152,7 @@ class RootCauseEngine:
 def analyze_root_cause(
     telemetry: List[Any],
     anomalies: List[Any],
+    scenarios: List[str] | None = None,
 ) -> Dict[str, Any]:
 
     engine = RootCauseEngine()
@@ -1001,4 +1160,5 @@ def analyze_root_cause(
     return engine.analyze(
         telemetry,
         anomalies,
+        scenarios=scenarios,
     )

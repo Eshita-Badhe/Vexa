@@ -6,6 +6,13 @@ SCENARIO_NAMES = [
     "application_failure",
 ]
 
+MULTI_FACTOR_SCENARIOS = [
+    "network_congestion",
+    "cdn_degradation",
+    "server_overload",
+    "application_failure",
+]
+
 ANOMALY_THRESHOLDS = {
     "bitrate_drop_percent": 30,
     "buffering_increase_percent": 100,

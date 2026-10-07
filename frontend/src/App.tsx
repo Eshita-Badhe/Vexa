@@ -335,13 +335,6 @@ function normalizeRootCause(result: any) {
     };
   }
 
-  // Root Cause Engine returns:
-  // {
-  //   primary: {...},
-  //   alternatives: [...],
-  //   analysis_summary: "..."
-  // }
-
   const primary = raw.primary || raw;
 
   const rawConfidence = Number(
@@ -350,9 +343,13 @@ function normalizeRootCause(result: any) {
       0
   );
 
+  // Backend may return either:
+  // 0.0 - 1.0
+  // or
+  // 0 - 100
   const confidence =
     rawConfidence <= 1
-      ? rawConfidence * 90
+      ? rawConfidence * 100
       : rawConfidence;
 
   return {
@@ -363,9 +360,16 @@ function normalizeRootCause(result: any) {
       primary.primary_cause ??
       "Unknown",
 
-    confidence: Math.round(confidence),
+    confidence: Math.round(
+      Math.max(
+        0,
+        Math.min(100, confidence)
+      )
+    ),
 
-    evidence: Array.isArray(primary.evidence)
+    evidence: Array.isArray(
+      primary.evidence
+    )
       ? primary.evidence
       : [],
 
@@ -381,10 +385,58 @@ function normalizeRootCause(result: any) {
       raw.analysis_summary ??
       "",
 
-    alternatives: Array.isArray(raw.alternatives)
+    alternatives: Array.isArray(
+      raw.alternatives
+    )
       ? raw.alternatives
       : [],
   };
+}
+
+function getVerificationConfig(
+  status: string
+) {
+  switch (status) {
+    case "VERIFIED":
+      return {
+        label: "DETECTION VERIFIED",
+        text: "text-emerald-300",
+        border: "border-emerald-400/20",
+        bg: "bg-emerald-400/[0.06]",
+        dot: "bg-emerald-400",
+        icon: CheckCircle2,
+      };
+
+    case "PARTIALLY_VERIFIED":
+      return {
+        label: "PARTIALLY VERIFIED",
+        text: "text-amber-300",
+        border: "border-amber-400/20",
+        bg: "bg-amber-400/[0.06]",
+        dot: "bg-amber-400",
+        icon: AlertTriangle,
+      };
+
+    case "NOT_VERIFIED":
+      return {
+        label: "NOT VERIFIED",
+        text: "text-red-300",
+        border: "border-red-400/20",
+        bg: "bg-red-400/[0.06]",
+        dot: "bg-red-400",
+        icon: ShieldAlert,
+      };
+
+    default:
+      return {
+        label: "VERIFICATION PENDING",
+        text: "text-slate-300",
+        border: "border-slate-700",
+        bg: "bg-slate-800/40",
+        dot: "bg-slate-500",
+        icon: CircleDot,
+      };
+  }
 }
 
 function getCauseIcon(
@@ -705,12 +757,16 @@ function MetricCard({
 
 function DashboardHeader({
   selectedScenario,
+  selectedScenarios,
   onScenarioChange,
+  onScenarioToggle,
   onSimulate,
   loading,
 }: {
   selectedScenario: string;
+  selectedScenarios: string[];
   onScenarioChange: (scenario: string) => void;
+  onScenarioToggle: (scenario: string) => void;
   onSimulate: () => void;
   loading: boolean;
 }) {
@@ -796,82 +852,168 @@ function DashboardHeader({
             RIGHT CONTROLS
         ================================================= */}
 
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+{/* CONTROLS */}
+<div className="flex flex-col gap-2 sm:flex-row sm:items-start">
 
-          {/* -----------------------------------------------
-              SCENARIO SELECTOR
-          ------------------------------------------------ */}
+  {/* SCENARIO CONTROL */}
+  <div className="relative">
 
-          <div className="relative min-w-[210px]">
+    <div className="flex items-center gap-3 rounded-xl border border-slate-700/70 bg-slate-950/80 px-3 py-2.5">
 
-            <div className="mb-1.5 ml-1 text-[8px] font-semibold uppercase tracking-[0.2em] text-slate-600">
-              Detection Scenario
+      <Signal className="h-4 w-4 shrink-0 text-cyan-400" />
+
+      <div className="min-w-[190px]">
+
+        <div className="text-[8px] uppercase tracking-[0.2em] text-slate-600">
+          Detection Scenario
+        </div>
+
+        <select
+          value={selectedScenario}
+          onChange={(event) =>
+            onScenarioChange(event.target.value)
+          }
+          disabled={loading}
+          className="mt-0.5 w-full cursor-pointer bg-transparent text-sm font-semibold text-white outline-none disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {SCENARIO_OPTIONS.map((option) => (
+            <option
+              key={option.value}
+              value={option.value}
+              className="bg-slate-950 text-white"
+            >
+              {option.label}
+            </option>
+          ))}
+        </select>
+
+      </div>
+
+    </div>
+
+
+    {/* FLOATING MULTI-FACTOR PANEL */}
+    {selectedScenario === "multi_factor" && (
+      <div className="absolute right-0 top-full z-50 mt-2 w-[285px] rounded-xl border border-cyan-400/10 bg-[#080d14]/[0.98] p-3 shadow-[0_20px_50px_rgba(0,0,0,0.55)] backdrop-blur-xl">
+
+        {/* PANEL HEADER */}
+        <div className="mb-2 flex items-center justify-between">
+
+          <div>
+            <div className="text-[8px] font-semibold uppercase tracking-[0.22em] text-slate-500">
+              Incident Factors
             </div>
 
-
-            <div className="relative">
-
-              <select
-                value={selectedScenario}
-                onChange={(event) =>
-                  onScenarioChange(event.target.value)
-                }
-                disabled={loading}
-                className="w-full appearance-none rounded-xl border border-slate-800 bg-slate-950/80 px-4 py-3 pr-10 text-sm font-semibold text-white outline-none transition hover:border-cyan-400/20 focus:border-cyan-400/30 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-
-                {SCENARIO_OPTIONS.map((scenario) => (
-                  <option
-                    key={scenario.value}
-                    value={scenario.value}
-                    className="bg-slate-950 text-white"
-                  >
-                    {scenario.label}
-                  </option>
-                ))}
-
-              </select>
-
-
-              <div className="pointer-events-none absolute inset-y-0 right-3 flex items-center">
-                <ChevronDown className="h-4 w-4 text-cyan-300" />
-              </div>
-
+            <div className="mt-0.5 text-[9px] text-slate-600">
+              Select 2–3 contributing signals
             </div>
-
           </div>
 
-
-          {/* -----------------------------------------------
-              SIMULATE INCIDENT
-          ------------------------------------------------ */}
-
-          <button
-            type="button"
-            disabled={loading}
-            onClick={onSimulate}
-            className="group inline-flex h-[48px] items-center justify-center gap-2 rounded-xl bg-cyan-400 px-6 text-xs font-bold uppercase tracking-[0.12em] text-slate-950 shadow-[0_0_25px_rgba(34,211,238,0.12)] transition hover:-translate-y-0.5 hover:bg-cyan-300 hover:shadow-[0_0_35px_rgba(34,211,238,0.18)] disabled:cursor-not-allowed disabled:opacity-50"
-          >
-
-            {loading ? (
-              <>
-                <RefreshCw className="h-4 w-4 animate-spin" />
-                ANALYZING...
-              </>
-            ) : (
-              <>
-                <Zap className="h-4 w-4 transition group-hover:scale-110" />
-
-                SIMULATE INCIDENT
-
-                <ArrowRight className="h-4 w-4 transition group-hover:translate-x-1" />
-              </>
-            )}
-
-          </button>
+          <span className="rounded-md border border-cyan-400/15 bg-cyan-400/[0.05] px-2 py-1 text-[9px] font-semibold text-cyan-300">
+            {selectedScenarios.length}/3
+          </span>
 
         </div>
 
+
+        {/* FACTORS */}
+        <div className="grid grid-cols-2 gap-1.5">
+
+          {SCENARIO_OPTIONS
+            .filter(
+              (option) =>
+                option.value !== "healthy" &&
+                option.value !== "multi_factor"
+            )
+            .map((option) => {
+
+              const checked =
+                selectedScenarios.includes(option.value);
+
+              const disabled =
+                !checked &&
+                selectedScenarios.length >= 3;
+
+              return (
+                <label
+                  key={option.value}
+                  className={`flex min-w-0 items-center gap-2 rounded-lg border px-2.5 py-2 transition ${
+                    checked
+                      ? "border-cyan-400/15 bg-cyan-400/[0.05]"
+                      : "border-slate-800/80 bg-slate-950/40"
+                  } ${
+                    disabled
+                      ? "cursor-not-allowed opacity-35"
+                      : "cursor-pointer hover:border-slate-700 hover:bg-slate-900"
+                  }`}
+                >
+
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    disabled={loading || disabled}
+                    onChange={() =>
+                      onScenarioToggle(option.value)
+                    }
+                    className="h-3.5 w-3.5 shrink-0 accent-cyan-400"
+                  />
+
+                  <span className="truncate text-[9px] font-medium text-slate-300">
+                    {option.label}
+                  </span>
+
+                </label>
+              );
+            })}
+
+        </div>
+
+
+        {/* SELECTION STATUS */}
+        <div className="mt-2 border-t border-slate-800/70 pt-2">
+
+          {selectedScenarios.length < 2 ? (
+            <div className="text-[9px] text-amber-300">
+              Select at least 2 factors to simulate.
+            </div>
+          ) : (
+            <div className="flex items-center gap-1.5 text-[9px] text-emerald-300">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+              Multi-factor configuration ready
+            </div>
+          )}
+
+        </div>
+
+      </div>
+    )}
+
+  </div>
+
+
+  {/* SIMULATE BUTTON */}
+  <button
+    type="button"
+    onClick={onSimulate}
+    disabled={
+      loading ||
+      (
+        selectedScenario === "multi_factor" &&
+        selectedScenarios.length < 2
+      )
+    }
+    className="group inline-flex h-[50px] items-center justify-center gap-2 rounded-xl bg-cyan-400 px-5 text-xs font-bold tracking-wide text-slate-950 transition hover:-translate-y-0.5 hover:bg-cyan-300 disabled:cursor-not-allowed disabled:opacity-40"
+  >
+    <Zap className="h-4 w-4 transition group-hover:rotate-12" />
+
+    {loading
+      ? "RUNNING..."
+      : "SIMULATE INCIDENT"}
+
+    <ArrowRight className="h-4 w-4 transition group-hover:translate-x-0.5" />
+  </button>
+
+</div>
       </div>
 
 
@@ -1287,13 +1429,21 @@ function ActiveSignals({
 function DashboardLayout({
   children,
   selectedScenario,
+  selectedScenarios,
   onScenarioChange,
+  onScenarioToggle,
   onSimulate,
   loading,
 }: {
   children: React.ReactNode;
   selectedScenario: string;
-  onScenarioChange: (scenario: any) => void;
+  selectedScenarios: string[];
+  onScenarioChange: (
+    scenario: string
+  ) => void;
+  onScenarioToggle: (
+    scenario: string
+  ) => void;
   onSimulate: () => void;
   loading: boolean;
 }) {
@@ -1303,9 +1453,26 @@ function DashboardLayout({
       <div className="relative z-10 mx-auto max-w-[1500px] px-3 py-4 sm:px-5 sm:py-6 lg:px-8">
 
         <DashboardHeader
-          selectedScenario={selectedScenario}
-          onScenarioChange={onScenarioChange}
-          onSimulate={onSimulate}
+          selectedScenario={
+            selectedScenario
+          }
+
+          selectedScenarios={
+            selectedScenarios
+          }
+
+          onScenarioChange={
+            onScenarioChange
+          }
+
+          onScenarioToggle={
+            onScenarioToggle
+          }
+
+          onSimulate={
+            onSimulate
+          }
+
           loading={loading}
         />
 
@@ -2156,155 +2323,6 @@ function OverviewPage({
         </div>
       </div>
 
-      {/* =================================================
-          ROOT CAUSE + RECOMMENDATIONS
-      ================================================= */}
-
-      <div className="grid gap-5 lg:grid-cols-[1.15fr_0.85fr]">
-
-        {/* ROOT CAUSE */}
-        <div className="signal-panel ai-glow p-5">
-          <SectionTitle
-            eyebrow="Root Cause Intelligence"
-            title="Likely Root Cause"
-            icon={Sparkles}
-            action={
-              <span className="rounded-full border border-cyan-400/15 bg-cyan-400/[0.04] px-3 py-1 text-[8px] font-bold uppercase tracking-[0.18em] text-cyan-300">
-                Backend analysis
-              </span>
-            }
-          />
-
-          <div className="mt-5 flex items-center gap-4 rounded-2xl border border-cyan-400/10 bg-cyan-400/[0.025] p-4">
-            {(() => {
-              const Icon =
-                getCauseIcon(
-                  rootCause.cause
-                );
-
-              return (
-                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-cyan-400/[0.08]">
-                  <Icon className="h-5 w-5 text-cyan-300" />
-                </div>
-              );
-            })()}
-
-            <div className="min-w-0 flex-1">
-              <div className="text-[8px] uppercase tracking-[0.2em] text-slate-600">
-                Primary hypothesis
-              </div>
-
-              <div className="mt-1 text-xl font-semibold text-white">
-                {
-                  rootCause.cause
-                }
-              </div>
-            </div>
-
-            <div className="text-right">
-              <div className="text-2xl font-semibold text-cyan-300">
-                {
-                  rootCause.confidence
-                }
-                %
-              </div>
-
-              <div className="text-[8px] uppercase tracking-wider text-slate-600">
-                Confidence
-              </div>
-            </div>
-          </div>
-
-          <div className="mt-5 grid gap-2 sm:grid-cols-2">
-            {(
-              rootCause
-                .signals
-                .length
-                ? rootCause.signals
-                : rootCause.evidence
-            )
-              .slice(0, 4)
-              .map(
-                (
-                  signal,
-                  index
-                ) => (
-                  <div
-                    key={`${signal}-${index}`}
-                    className="rounded-xl border border-slate-800 bg-slate-950/50 p-3 text-[10px] text-slate-300"
-                  >
-                    <span className="mr-2 text-cyan-400">
-                      0
-                      {index + 1}
-                    </span>
-
-                    {typeof signal ===
-                    "string"
-                      ? signal
-                      : JSON.stringify(
-                          signal
-                        )}
-                  </div>
-                )
-              )}
-
-            {!rootCause.signals
-              .length &&
-            !rootCause.evidence
-              .length ? (
-              <div className="sm:col-span-2 text-xs text-slate-600">
-                No root-cause evidence returned for this state.
-              </div>
-            ) : null}
-          </div>
-
-          <button
-            type="button"
-            onClick={() =>
-              navigate(
-                "/incident"
-              )
-            }
-            className="mt-5 inline-flex items-center gap-2 rounded-xl border border-cyan-400/20 bg-cyan-400/[0.05] px-4 py-2.5 text-xs font-semibold text-cyan-200 transition hover:bg-cyan-400/[0.09]"
-          >
-            Open full investigation
-
-            <ArrowRight className="h-3.5 w-3.5" />
-          </button>
-        </div>
-
-        {/* RECOMMENDATIONS */}
-        <div className="signal-panel p-5">
-          <SectionTitle
-            eyebrow="Response"
-            title="Recommended Actions"
-            icon={Zap}
-          />
-
-          <div className="mt-5 space-y-2.5">
-            {recommendations.map(
-              (
-                item,
-                index
-              ) => (
-                <div
-                  key={item}
-                  className="flex gap-3 rounded-xl border border-slate-800 bg-slate-950/50 p-3"
-                >
-                  <span className="mt-0.5 text-[9px] font-bold text-cyan-400">
-                    0
-                    {index + 1}
-                  </span>
-
-                  <span className="text-[10px] leading-5 text-slate-400">
-                    {item}
-                  </span>
-                </div>
-              )
-            )}
-          </div>
-        </div>
-      </div>
 
       {/* =================================================
           ALERT ENGINE
@@ -2486,6 +2504,37 @@ function IncidentExplorerPage({
       result
     );
 
+const detectionVerification =
+  result?.detection_verification;
+
+const verificationScore = Math.round(
+  Math.max(
+    0,
+    Math.min(
+      100,
+      Number(
+        detectionVerification?.verification_score ?? 0
+      )
+    )
+  )
+);
+
+const verificationStatus =
+  detectionVerification?.status ?? "PENDING";
+
+const verificationConfig =
+  getVerificationConfig(
+    verificationStatus
+  );
+
+const VerificationIcon =
+  verificationConfig.icon;
+
+const verificationEvidence =
+  detectionVerification?.primary_verification?.evidence ??
+  detectionVerification?.verification_evidence ??
+  [];
+  
   const qoeSummary =
     result?.qoe?.summary || {};
 
@@ -2749,26 +2798,43 @@ const [chatLoading, setChatLoading] =
   const aiExplanation =
     result?.ai_explanation;
 
-  const aiWhat =
-    aiExplanation
-      ?.what_happened ||
-    aiExplanation
-      ?.summary ||
-    null;
+const formatAIContent = (value: any): string => {
+  if (value === null || value === undefined) {
+    return "";
+  }
 
-  const aiWhy =
-    aiExplanation
-      ?.why ||
-    aiExplanation
-      ?.explanation ||
-    null;
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => String(item).trim())
+      .filter(Boolean)
+      .join("\n");
+  }
 
-  const aiActions =
-    aiExplanation
-      ?.recommended_actions ||
-    aiExplanation
-      ?.recommended_checks ||
-    [];
+  return String(value)
+    .replace(/\*\*/g, "")
+    .trim();
+};
+
+const aiWhat = formatAIContent(
+  aiExplanation?.what_happened ||
+  aiExplanation?.summary
+);
+
+const aiWhy = formatAIContent(
+  aiExplanation?.why ||
+  aiExplanation?.explanation
+);
+
+const aiActions =
+  Array.isArray(
+    aiExplanation?.recommended_actions
+  )
+    ? aiExplanation.recommended_actions
+    : Array.isArray(
+        aiExplanation?.recommended_checks
+      )
+      ? aiExplanation.recommended_checks
+      : [];
 
   /* =======================================================
      TELEMETRY AROUND INCIDENT
@@ -3263,15 +3329,31 @@ const [chatLoading, setChatLoading] =
             </div>
           </div>
 
-          <div className="rounded-2xl border border-cyan-400/10 bg-cyan-400/[0.025] px-6 py-4 text-center">
-            <div className="text-3xl font-semibold text-cyan-300">
-              {rootCause.confidence}%
-            </div>
+<div className="grid grid-cols-2 gap-2">
 
-            <div className="mt-1 text-[8px] uppercase tracking-[0.2em] text-slate-600">
-              Root-cause Score
-            </div>
-          </div>
+  {/* RCA CONFIDENCE */}
+  <div className="rounded-2xl border border-cyan-400/10 bg-cyan-400/[0.025] px-5 py-4 text-center">
+    <div className="text-2xl font-semibold text-cyan-300">
+      {rootCause.confidence}%
+    </div>
+
+    <div className="mt-1 text-[8px] uppercase tracking-[0.18em] text-slate-600">
+      RCA Confidence
+    </div>
+  </div>
+
+  {/* VERIFICATION */}
+  <div className="rounded-2xl border border-emerald-400/10 bg-emerald-400/[0.025] px-5 py-4 text-center">
+    <div className="text-2xl font-semibold text-emerald-300">
+      {verificationScore}%
+    </div>
+
+    <div className="mt-1 text-[8px] uppercase tracking-[0.18em] text-slate-600">
+      Verification
+    </div>
+  </div>
+
+</div>
         </div>
 
         {/* CAUSE EVIDENCE */}
@@ -3391,7 +3473,161 @@ const [chatLoading, setChatLoading] =
               )
             )}
         </div>
+{/* =====================================================
+    DETECTION VERIFICATION
+===================================================== */}
 
+<div className="signal-panel p-5 sm:p-6">
+
+  <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+
+    <div className="flex items-center gap-3">
+
+      <div
+        className={`flex h-11 w-11 items-center justify-center rounded-xl border ${verificationConfig.border} ${verificationConfig.bg}`}
+      >
+        <VerificationIcon
+          className={`h-5 w-5 ${verificationConfig.text}`}
+        />
+      </div>
+
+      <div>
+
+        <div className="text-[9px] font-bold uppercase tracking-[0.25em] text-slate-500">
+          Detection Verification
+        </div>
+
+        <div className="mt-1 text-sm font-semibold text-white">
+          Independent evidence validation
+        </div>
+
+      </div>
+
+    </div>
+
+    <div
+      className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-[9px] font-bold tracking-[0.16em] ${verificationConfig.text} ${verificationConfig.border} ${verificationConfig.bg}`}
+    >
+      <span
+        className={`h-1.5 w-1.5 rounded-full ${verificationConfig.dot}`}
+      />
+
+      {verificationConfig.label}
+    </div>
+
+  </div>
+
+
+  {/* SCORE */}
+
+  <div className="mt-5 grid gap-4 md:grid-cols-[180px_1fr]">
+
+    <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-5 text-center">
+
+      <div className="text-3xl font-semibold text-white">
+        {verificationScore}%
+      </div>
+
+      <div className="mt-1 text-[8px] uppercase tracking-[0.18em] text-slate-600">
+        Verification Score
+      </div>
+
+    </div>
+
+
+    <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-5">
+
+      <div className="flex items-center justify-between">
+
+        <span className="text-[8px] font-semibold uppercase tracking-[0.18em] text-slate-600">
+          Detection consistency
+        </span>
+
+        <span
+          className={`text-[10px] font-semibold ${verificationConfig.text}`}
+        >
+          {verificationStatus}
+        </span>
+
+      </div>
+
+      <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-800">
+
+        <div
+          className={`h-full rounded-full ${verificationConfig.dot} transition-all duration-500`}
+          style={{
+            width: `${verificationScore}%`,
+          }}
+        />
+
+      </div>
+
+      <p className="mt-3 text-xs leading-5 text-slate-500">
+        The verification layer checks whether the detected root
+        cause is supported by the observed anomalies and telemetry.
+      </p>
+
+    </div>
+
+  </div>
+
+
+  {/* VERIFICATION EVIDENCE */}
+
+  <div className="mt-5">
+
+    <div className="mb-3 text-[8px] font-semibold uppercase tracking-[0.2em] text-slate-600">
+      Verification Evidence
+    </div>
+
+    {verificationEvidence.length > 0 ? (
+
+      <div className="grid gap-2 md:grid-cols-2">
+
+        {verificationEvidence
+          .slice(0, 6)
+          .map(
+            (
+              item: any,
+              index: number
+            ) => (
+
+              <div
+                key={index}
+                className="flex gap-3 rounded-xl border border-slate-800 bg-slate-950/40 p-3"
+              >
+
+                <VerificationIcon
+                  className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${verificationConfig.text}`}
+                />
+
+                <span className="text-[10px] leading-5 text-slate-400">
+                  {typeof item === "string"
+                    ? item
+                    : item?.message ||
+                      item?.evidence ||
+                      JSON.stringify(item)}
+                </span>
+
+              </div>
+
+            )
+          )}
+
+      </div>
+
+    ) : (
+
+      <div className="rounded-xl border border-slate-800 bg-slate-950/40 p-4 text-xs text-slate-600">
+        Verification results will appear here after the backend
+        verification layer is enabled.
+      </div>
+
+    )}
+
+  </div>
+
+</div>
 {/* =======================================================
     AI INCIDENT EXPLANATION
 ======================================================= */}
@@ -3493,35 +3729,13 @@ const [chatLoading, setChatLoading] =
 
             </div>
 
-            <p className="mt-3 text-xs leading-6 text-slate-400">
+            <p className="mt-3 whitespace-pre-line text-xs leading-6 text-slate-400">
               {aiWhat}
             </p>
 
           </div>
         ) : null}
 
-
-        {aiWhy ? (
-          <div className="rounded-xl border border-slate-800 bg-slate-950/50 p-4">
-
-            <div className="flex items-center gap-2">
-
-              <BrainCircuit className="h-3.5 w-3.5 text-violet-300" />
-
-              <span className="text-[8px] font-bold uppercase tracking-[0.2em] text-violet-400">
-                Why it happened
-              </span>
-
-            </div>
-
-            <p className="mt-3 text-xs leading-6 text-slate-400">
-              {aiWhy}
-            </p>
-
-          </div>
-        ) : null}
-
-      </div>
 
 
       {/* Recommended checks */}
@@ -3571,7 +3785,7 @@ const [chatLoading, setChatLoading] =
         </div>
 
       ) : null}
-
+    </div>
     </div>
 
   ) : (
@@ -4798,6 +5012,11 @@ export default function App() {
         "healthy"
     );
 
+  const [
+    selectedScenarios,
+    setSelectedScenarios,
+  ] = useState<string[]>([]);
+
   const [result, setResult] =
     useState<any>(null);
 
@@ -4814,6 +5033,29 @@ export default function App() {
       null
     );
 
+
+  const toggleScenario = (
+    scenario: string
+  ) => {
+    setSelectedScenarios((previous) => {
+
+      if (previous.includes(scenario)) {
+        return previous.filter(
+          (item) => item !== scenario
+        );
+      }
+
+      if (previous.length >= 3) {
+        return previous;
+      }
+
+      return [
+        ...previous,
+        scenario,
+      ];
+    });
+  };
+
   /* =======================================================
      RUN DETECTION
   ======================================================= */
@@ -4824,9 +5066,25 @@ export default function App() {
         setLoading(true);
         setError(null);
 
+        if (
+          selectedScenario === "multi_factor" &&
+          selectedScenarios.length < 2
+        ) {
+          setError(
+            "Select at least 2 incident factors."
+          );
+
+          setLoading(false);
+
+          return;
+        }
+
         const data =
           await fetchScenarioSimulation(
-            selectedScenario
+            selectedScenario,
+            selectedScenario === "multi_factor"
+              ? selectedScenarios
+              : undefined
           );
 
         setResult(data);
@@ -4956,12 +5214,39 @@ useEffect(() => {
     path="/overview"
     element={
       result ? (
-        <DashboardLayout
-          selectedScenario={selectedScenario}
-          onScenarioChange={setSelectedScenario}
-          onSimulate={() => void runDetection()}
-          loading={loading}
-        >
+<DashboardLayout
+  selectedScenario={
+    selectedScenario
+  }
+
+  selectedScenarios={
+    selectedScenarios
+  }
+
+  onScenarioChange={(scenario) => {
+
+    setSelectedScenario(
+      scenario
+    );
+
+    if (
+      scenario !== "multi_factor"
+    ) {
+      setSelectedScenarios([]);
+    }
+
+  }}
+
+  onScenarioToggle={
+    toggleScenario
+  }
+
+  onSimulate={() =>
+    void runDetection()
+  }
+
+  loading={loading}
+>
           <OverviewPage
             result={result}
             onRefresh={runDetection}
@@ -4978,12 +5263,39 @@ useEffect(() => {
     path="/incident"
     element={
       result ? (
-        <DashboardLayout
-          selectedScenario={selectedScenario}
-          onScenarioChange={setSelectedScenario}
-          onSimulate={() => void runDetection()}
-          loading={loading}
-        >
+<DashboardLayout
+  selectedScenario={
+    selectedScenario
+  }
+
+  selectedScenarios={
+    selectedScenarios
+  }
+
+  onScenarioChange={(scenario) => {
+
+    setSelectedScenario(
+      scenario
+    );
+
+    if (
+      scenario !== "multi_factor"
+    ) {
+      setSelectedScenarios([]);
+    }
+
+  }}
+
+  onScenarioToggle={
+    toggleScenario
+  }
+
+  onSimulate={() =>
+    void runDetection()
+  }
+
+  loading={loading}
+>
           <IncidentExplorerPage
             result={result}
           />
@@ -4999,12 +5311,39 @@ useEffect(() => {
     path="/analytics"
     element={
       result ? (
-        <DashboardLayout
-          selectedScenario={selectedScenario}
-          onScenarioChange={setSelectedScenario}
-          onSimulate={() => void runDetection()}
-          loading={loading}
-        >
+<DashboardLayout
+  selectedScenario={
+    selectedScenario
+  }
+
+  selectedScenarios={
+    selectedScenarios
+  }
+
+  onScenarioChange={(scenario) => {
+
+    setSelectedScenario(
+      scenario
+    );
+
+    if (
+      scenario !== "multi_factor"
+    ) {
+      setSelectedScenarios([]);
+    }
+
+  }}
+
+  onScenarioToggle={
+    toggleScenario
+  }
+
+  onSimulate={() =>
+    void runDetection()
+  }
+
+  loading={loading}
+>
           <AnalyticsPage
             result={result}
           />
